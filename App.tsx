@@ -5,7 +5,7 @@ import { parseUserMessage } from './services/geminiService';
 import ProductCard from './components/ProductCard';
 import CartSidebar from './components/CartSidebar';
 import ChatInterface from './components/ChatInterface';
-import { LayoutGrid, MessageSquare, ShoppingCart, Search, Loader2, BookOpen } from 'lucide-react';
+import { LayoutGrid, MessageSquare, ShoppingCart, Search, Loader2, BookOpen, Filter } from 'lucide-react';
 
 const App: React.FC = () => {
   // Data State
@@ -13,13 +13,23 @@ const App: React.FC = () => {
   const [isCatalogLoading, setIsCatalogLoading] = useState(true);
 
   // App State
-  const [cartItems, setCartItems] = useState<CartItem[]>([]);
+  // Initialiser le panier depuis le localStorage si disponible
+  const [cartItems, setCartItems] = useState<CartItem[]>(() => {
+    const saved = localStorage.getItem('boutik_cart');
+    return saved ? JSON.parse(saved) : [];
+  });
+  
   const [isCartOpen, setIsCartOpen] = useState(false);
   const [currentView, setCurrentView] = useState<AppView>(AppView.CHAT);
   const [searchQuery, setSearchQuery] = useState('');
+  const [selectedCategory, setSelectedCategory] = useState<string>('Tout');
   
   // Chat State
-  const [messages, setMessages] = useState<Message[]>([]);
+  // Initialiser les messages depuis le localStorage si disponible
+  const [messages, setMessages] = useState<Message[]>(() => {
+    const saved = localStorage.getItem('boutik_messages');
+    return saved ? JSON.parse(saved) : [];
+  });
   const [isAiLoading, setIsAiLoading] = useState(false);
 
   // Initial Data Fetching
@@ -36,6 +46,16 @@ const App: React.FC = () => {
     };
     loadData();
   }, []);
+
+  // Persistance : Sauvegarder le panier à chaque changement
+  useEffect(() => {
+    localStorage.setItem('boutik_cart', JSON.stringify(cartItems));
+  }, [cartItems]);
+
+  // Persistance : Sauvegarder les messages à chaque changement
+  useEffect(() => {
+    localStorage.setItem('boutik_messages', JSON.stringify(messages));
+  }, [messages]);
 
   // Cart Logic
   const addToCart = (product: Product, quantity = 1) => {
@@ -165,10 +185,16 @@ const App: React.FC = () => {
   };
 
   // Filtered products for Catalog View
-  const filteredProducts = products.filter(p => 
-    p.description.toLowerCase().includes(searchQuery.toLowerCase()) || 
-    p.category.toLowerCase().includes(searchQuery.toLowerCase())
-  );
+  const filteredProducts = products.filter(p => {
+    const matchesSearch = p.description.toLowerCase().includes(searchQuery.toLowerCase()) || 
+                          p.category.toLowerCase().includes(searchQuery.toLowerCase());
+    const matchesCategory = selectedCategory === 'Tout' || p.category === selectedCategory;
+    
+    return matchesSearch && matchesCategory;
+  });
+
+  // Extract unique categories for filter pills
+  const categories = ['Tout', ...Array.from(new Set(products.map(p => p.category)))];
 
   const cartTotalItems = cartItems.reduce((acc, item) => acc + item.quantity, 0);
 
@@ -273,6 +299,23 @@ const App: React.FC = () => {
                   </div>
                 </div>
 
+                {/* CATEGORY FILTERS */}
+                <div className="flex gap-2 overflow-x-auto pb-4 mb-2 scrollbar-hide">
+                  {categories.map(cat => (
+                    <button
+                      key={cat}
+                      onClick={() => setSelectedCategory(cat)}
+                      className={`px-4 py-2 rounded-full text-sm font-medium whitespace-nowrap transition-all ${
+                        selectedCategory === cat 
+                          ? 'bg-slate-900 text-white shadow-md' 
+                          : 'bg-white text-slate-600 border border-slate-200 hover:border-slate-300 hover:bg-slate-50'
+                      }`}
+                    >
+                      {cat}
+                    </button>
+                  ))}
+                </div>
+
                 <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-4">
                   {filteredProducts.map(product => (
                     <ProductCard key={product.id} product={product} onAdd={addToCart} />
@@ -281,6 +324,14 @@ const App: React.FC = () => {
                     <div className="col-span-full flex flex-col items-center justify-center py-20 text-slate-400">
                       <Search size={48} className="mb-4 opacity-20" />
                       <p>Aucun livre trouvé pour "{searchQuery}"</p>
+                      {selectedCategory !== 'Tout' && (
+                        <button 
+                          onClick={() => setSelectedCategory('Tout')}
+                          className="mt-2 text-indigo-600 font-medium hover:underline"
+                        >
+                          Réinitialiser les filtres
+                        </button>
+                      )}
                     </div>
                   )}
                 </div>
